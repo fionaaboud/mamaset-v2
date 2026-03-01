@@ -61,10 +61,18 @@ async function getParentingAdvice(userMessage, userName) {
 
 async function mintPrivately(tokenURI) {
   const { address: burnerAddress } = await unlink.burner.addressOf(0);
-  const GAS_AMOUNT = 1_000_000_000_000_000n;
-  const NATIVE = "0x0000000000000000000000000000000000000000";
+  const GAS_AMOUNT = 100_000_000_000_000_000n; // 0.1 MON
+  const NATIVE = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+  await unlink.sync();
   const fundResult = await unlink.burner.fund(0, { token: NATIVE, amount: GAS_AMOUNT });
   await waitForConfirmation(unlink, fundResult.relayId);
+  // Wait for the withdrawal to actually land on-chain before sending
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    const balance = await unlink.burner.getBalance(burnerAddress);
+    if (balance >= GAS_AMOUNT) break;
+    await new Promise(r => setTimeout(r, 2000));
+  }
   const iface = new ethers.Interface(contractABI);
   const calldata = iface.encodeFunctionData("mintMemory", [burnerAddress, tokenURI]);
   await unlink.burner.send(0, { to: process.env.MONAD_CONTRACT_ADDRESS, data: calldata });
